@@ -107,6 +107,7 @@
 
   <!-- iOS tap gate (hidden instantly on Android) -->
   <div id="tap-gate" onclick="grantPermission()">
+    <div class="icon">🧭</div>
     <div class="label">Tap to enable compass</div>
     <div class="sub">Required for AR navigation</div>
   </div>
@@ -141,7 +142,7 @@
     </svg>
 
     <div id="dist-pill">–– m</div>
-    <div id="arrived">📍 You're at the chancel</div>
+    <div id="arrived">📍 You're at the pulpit</div>
   </div>
 
   <!-- Status / waiting hint -->
@@ -151,15 +152,17 @@
   <!--
     CALIBRATION
     ───────────
-    If the 3D model appears offset when you're standing at the Chancel,
+    If the 3D model appears offset when you're standing at the pulpit,
     adjust these coordinates. Triple-tap the distance pill to log your
     current GPS position to the browser console.
 
-    latitude:  36.00149
-    longitude: -78.94093
+    latitude:  36.00167
+    longitude: -78.93976  (just outside Duke Chapel)
 
-    scale="1 1 1"      → adjust if the figure is too large or small
-    position="0 0 0"   → lower Y (e.g. "0 -1.5 0") to drop figure to floor height
+    scale="30.48 30.48 30.48"  → 100 ft tall assuming native model height ≈ 1 m
+                                  if the figure looks too large/small, adjust this
+                                  proportionally (e.g. 60.96 = 200 ft, 15.24 = 50 ft)
+    position="0 0 0"           → lower Y (e.g. "0 -1.5 0") to plant figure at ground
   -->
   <a-scene
     vr-mode-ui="enabled: false"
@@ -176,8 +179,8 @@
 
     <a-entity
       gltf-model="#model"
-      gps-projected-entity-place="latitude: 36.00197; longitude: -78.94040"
-      scale="10 10 10"
+      gps-projected-entity-place="latitude: 36.00167; longitude: -78.93976"
+      scale="30.48 30.48 30.48"
       position="0 0 0">
     </a-entity>
 
@@ -185,7 +188,7 @@
 
   <script>
     // ── Target ────────────────────────────────────────────────────
-    const TARGET = { lat: 36.00197, lng: -78.94040 };
+    const TARGET = { lat: 36.00167, lng: -78.93976 };
     const ARRIVED_M = 5; // metres — hide arrow, show arrived state
 
     // ── State ─────────────────────────────────────────────────────
@@ -302,8 +305,8 @@
 
         const feet = dist * 3.28084;
         distPill.textContent = feet < 528
-          ? `${Math.round(feet)} ft to Chancel`
-          : `${(feet / 5280).toFixed(2)} mi to Chancel`;
+          ? `${Math.round(feet)} ft to pulpit`
+          : `${(feet / 5280).toFixed(2)} mi to pulpit`;
       }
     }
 
