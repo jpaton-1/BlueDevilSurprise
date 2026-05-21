@@ -107,7 +107,6 @@
 
   <!-- iOS tap gate (hidden instantly on Android) -->
   <div id="tap-gate" onclick="grantPermission()">
-    <div class="icon">🧭</div>
     <div class="label">Tap to enable compass</div>
     <div class="sub">Required for AR navigation</div>
   </div>
@@ -142,7 +141,7 @@
     </svg>
 
     <div id="dist-pill">–– m</div>
-    <div id="arrived">📍 You're at the pulpit</div>
+    <div id="arrived">📍 You're at the chancel</div>
   </div>
 
   <!-- Status / waiting hint -->
@@ -152,7 +151,7 @@
   <!--
     CALIBRATION
     ───────────
-    If the 3D model appears offset when you're standing at the pulpit,
+    If the 3D model appears offset when you're standing at the Chancel,
     adjust these coordinates. Triple-tap the distance pill to log your
     current GPS position to the browser console.
 
@@ -178,7 +177,7 @@
     <a-entity
       gltf-model="#model"
       gps-projected-entity-place="latitude: 36.00197; longitude: -78.94040"
-      scale="1 1 1"
+      scale="10 10 10"
       position="0 0 0">
     </a-entity>
 
@@ -303,8 +302,8 @@
 
         const feet = dist * 3.28084;
         distPill.textContent = feet < 528
-          ? `${Math.round(feet)} ft to pulpit`
-          : `${(feet / 5280).toFixed(2)} mi to pulpit`;
+          ? `${Math.round(feet)} ft to Chancel`
+          : `${(feet / 5280).toFixed(2)} mi to Chancel`;
       }
     }
 
