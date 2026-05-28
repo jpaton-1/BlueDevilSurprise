@@ -68,22 +68,6 @@
       transition: opacity 0.8s ease;
     }
 
-    /* Arrived banner */
-    #arrived {
-      display: none;
-      background: rgba(0, 48, 135, 0.82);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      color: #fff;
-      font-size: 18px;
-      font-weight: 700;
-      padding: 14px 32px;
-      border-radius: 40px;
-      border: 1px solid rgba(255,255,255,0.18);
-      animation: pulse 1.6s ease-in-out infinite;
-    }
-    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-
     /* Waiting state (no GPS / compass yet) */
     #waiting {
       position: fixed;
@@ -142,7 +126,6 @@
     </svg>
 
     <div id="dist-pill">–– m</div>
-    <div id="arrived">📍 You're at the pulpit</div>
   </div>
 
   <!-- Status / waiting hint -->
@@ -156,13 +139,14 @@
     adjust these coordinates. Triple-tap the distance pill to log your
     current GPS position to the browser console.
 
-    latitude:  36.00167
-    longitude: -78.93976  (just outside Duke Chapel)
+    latitude:  36.001639
+    longitude: -78.939694  (steps in front of Duke Chapel)
 
     scale="30.48 30.48 30.48"  → 100 ft tall assuming native model height ≈ 1 m
                                   if the figure looks too large/small, adjust this
                                   proportionally (e.g. 60.96 = 200 ft, 15.24 = 50 ft)
-    position="0 0 0"           → lower Y (e.g. "0 -1.5 0") to plant figure at ground
+    position="0 15 0"          → Y lifts the model 15 m above ground so it appears in the air;
+                                  adjust upward/downward to taste
   -->
   <a-scene
     vr-mode-ui="enabled: false"
@@ -179,17 +163,16 @@
 
     <a-entity
       gltf-model="#model"
-      gps-projected-entity-place="latitude: 36.00167; longitude: -78.93976"
+      gps-projected-entity-place="latitude: 36.001639; longitude: -78.939694; maxDistance: 0"
       scale="30.48 30.48 30.48"
-      position="0 0 0">
+      position="0 15 0">
     </a-entity>
 
   </a-scene>
 
   <script>
     // ── Target ────────────────────────────────────────────────────
-    const TARGET = { lat: 36.00167, lng: -78.93976 };
-    const ARRIVED_M = 5; // metres — hide arrow, show arrived state
+    const TARGET = { lat: 36.001639, lng: -78.939694 };
 
     // ── State ─────────────────────────────────────────────────────
     let compassHeading = null; // degrees, 0 = North, clockwise
@@ -285,29 +268,19 @@
 
       const arrowRing = document.getElementById('arrow-ring');
       const distPill  = document.getElementById('dist-pill');
-      const arrived   = document.getElementById('arrived');
       const waiting   = document.getElementById('waiting');
 
-      // Hide waiting label once we have data
       waiting.style.opacity = '0';
+      arrowRing.style.opacity = '1';
+      distPill.style.opacity  = '1';
 
-      if (dist <= ARRIVED_M) {
-        arrowRing.style.opacity = '0';
-        distPill.style.opacity  = '0';
-        arrived.style.display   = 'block';
-      } else {
-        arrowRing.style.opacity = '1';
-        distPill.style.opacity  = '1';
-        arrived.style.display   = 'none';
+      document.getElementById('arrow-inner')
+        .setAttribute('transform', `rotate(${smoothAngle.toFixed(1)})`);
 
-        document.getElementById('arrow-inner')
-          .setAttribute('transform', `rotate(${smoothAngle.toFixed(1)})`);
-
-        const feet = dist * 3.28084;
-        distPill.textContent = feet < 528
-          ? `${Math.round(feet)} ft to pulpit`
-          : `${(feet / 5280).toFixed(2)} mi to pulpit`;
-      }
+      const feet = dist * 3.28084;
+      distPill.textContent = feet < 528
+        ? `${Math.round(feet)} ft to Chapel steps`
+        : `${(feet / 5280).toFixed(2)} mi to Chapel steps`;
     }
 
     // Run tick on a fallback interval in case sensor events stall
