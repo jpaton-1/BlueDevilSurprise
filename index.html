@@ -23,6 +23,14 @@
       · Fades out over the final 40% of the 2.4-second lifetime.
   -->
   <script>
+    // Spin directly on object3D — avoids fighting AR.js's transform updates
+    AFRAME.registerComponent('slow-spin', {
+      schema: { period: { default: 18 } }, // seconds per full rotation
+      tick(t, dt) {
+        this.el.object3D.rotation.y += (Math.PI * 2) / (this.data.period * 1000) * dt;
+      }
+    });
+
     AFRAME.registerComponent('particle-burst', {
       init() {
         this.triggered = false;
@@ -253,7 +261,7 @@
   -->
   <a-scene
     vr-mode-ui="enabled: false"
-    arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false"
+    arjs="sourceType: webcam; videoTexture: false; debugUIEnabled: false"
     renderer="antialias: true; alpha: true">
 
     <a-assets timeout="30000">
@@ -275,18 +283,8 @@
       scale="0.001 0.001 0.001"
       position="0 -1.6 0"
       particle-burst
-      animation__reveal="property: scale;
-                          from: 0.001 0.001 0.001;
-                          to: 30.48 30.48 30.48;
-                          dur: 1400;
-                          easing: easeOutElastic;
-                          startEvents: reveal;
-                          autoplay: false"
-      animation__spin="property: rotation;
-                        to: 0 360 0;
-                        dur: 18000;
-                        easing: linear;
-                        loop: true">
+      slow-spin
+      animation__reveal="property: scale; from: 0.001 0.001 0.001; to: 30.48 30.48 30.48; dur: 1400; easing: easeOutElastic; startEvents: reveal; autoplay: false">
     </a-entity>
 
   </a-scene>
