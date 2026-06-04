@@ -7,22 +7,42 @@
   <meta name="mobile-web-app-capable" content="yes">
   <title>Duke Chapel AR</title>
 
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar.js"></script>
+  <!-- ① Error display — auto-shown on any load/JS failure -->
+  <div id="err-bar" style="display:none;position:fixed;top:0;left:0;right:0;
+    padding:10px 14px;background:#c00;color:#fff;font:13px/1.4 monospace;
+    z-index:99999;white-space:pre-wrap;"></div>
 
-  <!--
-    Particle burst component — must be registered before <a-scene> is parsed.
-    THREE is available globally once A-Frame loads.
-
-    On trigger():
-      · Samples the entity's world position (ground-level GPS pin).
-      · Creates 300 PointsMaterial particles in Duke blue + white.
-      · Adds them directly to the scene's Object3D so they render
-        in world-space at 1 unit = 1 metre, unaffected by model scale.
-      · Physics: analytic equations (pos = v₀t + ½gt²), no accumulation drift.
-      · Fades out over the final 40% of the 2.4-second lifetime.
-  -->
   <script>
+    // Show errors visibly before anything else loads
+    function showErr(msg) {
+      var b = document.getElementById('err-bar');
+      b.textContent = (b.textContent ? b.textContent + '\n' : '') + msg;
+      b.style.display = 'block';
+    }
+    window.onerror = function(msg, src, line) {
+      showErr('JS: ' + msg + '  (line ' + line + ')');
+    };
+    window.addEventListener('unhandledrejection', function(e) {
+      showErr('Promise: ' + e.reason);
+    });
+  </script>
+
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"
+          onerror="showErr('FAILED: aframe.min.js did not load')"></script>
+  <!-- aframe-ar-nft.js — the build that was confirmed working originally -->
+  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar-nft.js"
+          onerror="showErr('FAILED: aframe-ar-nft.js did not load')"></script>
+
+  <script>
+    // Verify AR.js actually registered its GPS components
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof AFRAME === 'undefined') return showErr('AFRAME global missing');
+      if (!AFRAME.components['gps-new-camera'])
+        showErr('gps-new-camera not registered — AR.js load likely failed');
+      if (!AFRAME.systems['arjs'])
+        showErr('arjs system not registered — AR.js load likely failed');
+    });
+
     // Spin directly on object3D — avoids fighting AR.js's transform updates
     AFRAME.registerComponent('slow-spin', {
       schema: { period: { default: 18 } }, // seconds per full rotation
