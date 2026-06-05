@@ -25,11 +25,68 @@
     window.addEventListener('unhandledrejection', function(e) { showErr('Promise: ' + e.reason); });
   </script>
 
-  <!-- Exact versions from the AR.js official location-based example -->
+  <!-- Exact script set + order from the AR.js official location-based example -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"
           onerror="showErr('FAILED to load aframe.min.js')"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar.js"
-          onerror="showErr('FAILED to load aframe-ar.js')"></script>
+  <!-- ① Defines THREEx.LocationBased + DeviceOrientationControls.
+          REQUIRED by gps-new-camera and MUST load before the A-Frame build —
+          its absence was the “Can't find variable: THREEx” crash. -->
+  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/three.js/build/ar-threex-location-only.js"
+          onerror="showErr('FAILED to load ar-threex-location-only.js')"></script>
+  <!-- ② Location-only A-Frame components (gps-new-camera / gps-new-entity-place).
+          15 KB, no artoolkit/NFT engine — avoids the image-tracking init path. -->
+  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar-new-location-only.js"
+          onerror="showErr('FAILED to load aframe-ar-new-location-only.js')"></script>
+
+  <!-- Particle burst + slow spin components (registered before the scene parses) -->
+  <script>
+    // Slow continuous Y spin — writes object3D directly so it never fights
+    // gps-new-entity-place (which only sets position).
+    AFRAME.registerComponent('slow-spin', {
+      schema: { period: { default: 18 } }, // seconds per revolution
+      tick: function (t, dt) {
+        if (!dt) return;
+        this.el.object3D.rotation.y += (Math.PI * 2) / (this.data.period * 1000) * dt;
+      }
+    });
+
+    // One-shot particle burst at the entity's world position.
+    AFRAME.registerComponent('particle-burst', {
+      init: function () { this.active = false; this.points = null; this.vel = null; this.t0 = 0; this.LIFE = 2400; },
+      trigger: function () {
+        if (this.active || this.points) return;
+        var N = 300, geo = new THREE.BufferGeometry();
+        var pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+        this.vel = new Float32Array(N * 3);
+        for (var i = 0; i < N; i++) {
+          var th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI * 0.72, sp = 2.5 + Math.random() * 5.5;
+          this.vel[i*3]   = sp * Math.sin(ph) * Math.cos(th);
+          this.vel[i*3+1] = sp * Math.cos(ph);
+          this.vel[i*3+2] = sp * Math.sin(ph) * Math.sin(th);
+          if (Math.random() > 0.4) { col[i*3]=0; col[i*3+1]=48/255; col[i*3+2]=135/255; } // Duke blue
+          else { col[i*3]=col[i*3+1]=col[i*3+2]=1; }                                       // white
+        }
+        var mat = new THREE.PointsMaterial({ size: 0.5, vertexColors: true, transparent: true, opacity: 1, depthWrite: false, sizeAttenuation: true });
+        this.points = new THREE.Points(geo, mat);
+        this.el.object3D.updateWorldMatrix(true, false);
+        var wp = new THREE.Vector3(); this.el.object3D.getWorldPosition(wp);
+        this.points.position.copy(wp);
+        this.el.sceneEl.object3D.add(this.points);
+        this.t0 = performance.now(); this.active = true;
+      },
+      tick: function () {
+        if (!this.active || !this.points) return;
+        var t = (performance.now() - this.t0) / 1000, p = t / (this.LIFE / 1000);
+        if (p >= 1) { this.el.sceneEl.object3D.remove(this.points); this.points.geometry.dispose(); this.points.material.dispose(); this.points = null; this.active = false; return; }
+        var a = this.points.geometry.attributes.position.array, N = a.length / 3;
+        for (var i = 0; i < N; i++) { a[i*3]=this.vel[i*3]*t; a[i*3+1]=this.vel[i*3+1]*t - 4.9*t*t; a[i*3+2]=this.vel[i*3+2]*t; }
+        this.points.geometry.attributes.position.needsUpdate = true;
+        this.points.material.opacity = p > 0.6 ? 1 - (p - 0.6) / 0.4 : 1;
+      }
+    });
+  </script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -59,6 +116,7 @@
       position: fixed; inset: 0; z-index: 200; pointer-events: none;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 24px;
+      transition: opacity 1.6s ease;
     }
     #arrow-ring { transition: opacity 0.8s ease; }
     #dist-pill {
@@ -133,15 +191,20 @@
 
     <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
 
-    <!-- Hidden until GPS positions it at the Chapel, so the giant blue model
-         never renders point-blank on the camera (which looks like a blue screen). -->
+    <!-- Hidden + tiny until you are within 10 ft of the GPS point. Then the
+         particles burst and the model springs up to full 100 ft scale.
+         Keeping it hidden until reveal also prevents the giant blue model from
+         rendering point-blank on the camera before GPS places it. -->
     <a-entity
       id="blue-devil"
       gltf-model="#model"
       gps-new-entity-place="latitude: 36.001639; longitude: -78.939694"
-      scale="30.48 30.48 30.48"
       position="0 -1.6 0"
-      visible="false">
+      scale="0.001 0.001 0.001"
+      visible="false"
+      slow-spin
+      particle-burst
+      animation__reveal="property: scale; from: 0.001 0.001 0.001; to: 30.48 30.48 30.48; dur: 1400; easing: easeOutElastic; startEvents: reveal; autoplay: false">
     </a-entity>
 
   </a-scene>
@@ -154,18 +217,25 @@
       e.addEventListener('model-error', function () { showErr('model-error: blue-devil.glb failed to load'); });
       if (typeof AFRAME !== 'undefined' && !AFRAME.components['gps-new-camera'])
         showErr('gps-new-camera missing — AR.js did not load');
-
-      // Reveal the model only after AR.js places it via a real GPS fix,
-      // so it appears at the Chapel rather than on top of the camera.
-      var cam = document.querySelector('a-camera');
-      if (cam) cam.addEventListener('gps-camera-update-position', function () {
-        document.getElementById('blue-devil').setAttribute('visible', 'true');
-      }, { once: true });
     });
 
     // ── Navigation overlay logic ──────────────────────────────────
-    const TARGET = { lat: 36.001639, lng: -78.939694 };
-    let compassHeading = null, userPos = null, smoothAngle = null;
+    const TARGET    = { lat: 36.001639, lng: -78.939694 };
+    const REVEAL_M  = 3.048; // 10 feet — distance at which the Blue Devil appears
+    let compassHeading = null, userPos = null, smoothAngle = null, revealed = false;
+
+    // Particle burst + spring reveal + fade the nav UI away.
+    function triggerReveal() {
+      if (revealed) return;
+      revealed = true;
+      var entity = document.getElementById('blue-devil');
+      entity.setAttribute('visible', 'true');
+      var pb = entity.components['particle-burst'];
+      if (pb) pb.trigger();
+      setTimeout(function () { entity.emit('reveal'); }, 450); // model springs up after particles lead
+      document.getElementById('nav').style.opacity     = '0';
+      document.getElementById('waiting').style.opacity = '0';
+    }
 
     // AR.js config — applied to the scene ONLY after the camera is granted.
     const ARJS_CONFIG = 'sourceType: webcam; videoTexture: false; debugUIEnabled: false';
@@ -249,6 +319,9 @@
       document.getElementById('dist-pill').textContent = feet < 528
         ? `${Math.round(feet)} ft to Chapel steps`
         : `${(feet/5280).toFixed(2)} mi to Chapel steps`;
+
+      // Within 10 ft → reveal the Blue Devil through a particle burst.
+      if (dist <= REVEAL_M) triggerReveal();
     }
     setInterval(tick, 250);
   </script>
