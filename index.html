@@ -250,26 +250,16 @@
         try { await DeviceOrientationEvent.requestPermission(); } catch (e) {}
       }
 
-      // 2. Force the rear-camera prompt. Insecure context (http) has no
-      //    mediaDevices at all — surface that clearly.
+      // 2. Secure-context guard — the camera needs HTTPS.
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showErr('Camera API unavailable. The page must be served over HTTPS ' +
-                '(GitHub Pages is fine; a plain http:// LAN address is not).');
+        showErr('Camera API unavailable. The page must be served over HTTPS.');
         return;
       }
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } }, audio: false
-        });
-        // Release immediately so AR.js can claim the camera next.
-        stream.getTracks().forEach(function (t) { t.stop(); });
-      } catch (e) {
-        showErr('Camera blocked (' + e.name + '): ' + e.message +
-                '\nTap “aA” in the address bar → Website Settings → Camera → Allow, then reload.');
-        return; // do NOT start AR without a camera (that is the blue screen)
-      }
 
-      // 3. Camera granted — hide gate, start AR.js, start sensors.
+      // 3. Let AR.js be the SOLE owner of the camera. Do NOT call getUserMedia
+      //    ourselves first: grabbing the camera, releasing it, then letting
+      //    AR.js re-grab it races on iOS and kills the feed — exactly the
+      //    "worked for a moment, then failed" symptom. One grab only.
       document.getElementById('tap-gate').style.display = 'none';
       document.querySelector('a-scene').setAttribute('arjs', ARJS_CONFIG);
       boot();
