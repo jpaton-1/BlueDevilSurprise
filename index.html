@@ -5,204 +5,67 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
+  <!-- Defeat aggressive mobile-browser caching while iterating -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Duke Chapel AR</title>
 
-  <!-- ① Error display — auto-shown on any load/JS failure -->
+  <!-- On-screen error bar (we can't see the phone console) -->
   <div id="err-bar" style="display:none;position:fixed;top:0;left:0;right:0;
     padding:10px 14px;background:#c00;color:#fff;font:13px/1.4 monospace;
     z-index:99999;white-space:pre-wrap;"></div>
-
   <script>
-    // Show errors visibly before anything else loads
     function showErr(msg) {
       var b = document.getElementById('err-bar');
       b.textContent = (b.textContent ? b.textContent + '\n' : '') + msg;
       b.style.display = 'block';
     }
-    window.onerror = function(msg, src, line) {
-      showErr('JS: ' + msg + '  (line ' + line + ')');
-    };
-    window.addEventListener('unhandledrejection', function(e) {
-      showErr('Promise: ' + e.reason);
-    });
+    window.onerror = function(msg, src, line) { showErr('JS: ' + msg + ' (line ' + line + ')'); };
+    window.addEventListener('unhandledrejection', function(e) { showErr('Promise: ' + e.reason); });
   </script>
 
+  <!-- Exact versions from the AR.js official location-based example -->
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"
-          onerror="showErr('FAILED: aframe.min.js did not load')"></script>
-  <!-- aframe-ar.js — the build confirmed working ("Awesome! That works") -->
+          onerror="showErr('FAILED to load aframe.min.js')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar.js"
-          onerror="showErr('FAILED: aframe-ar.js did not load')"></script>
-
-  <script>
-    // Verify AR.js actually registered its GPS components
-    document.addEventListener('DOMContentLoaded', function() {
-      if (typeof AFRAME === 'undefined') return showErr('AFRAME global missing');
-      if (!AFRAME.components['gps-new-camera'])
-        showErr('gps-new-camera not registered — AR.js load likely failed');
-      if (!AFRAME.systems['arjs'])
-        showErr('arjs system not registered — AR.js load likely failed');
-    });
-
-    // Spin directly on object3D — avoids fighting AR.js's transform updates
-    AFRAME.registerComponent('slow-spin', {
-      schema: { period: { default: 18 } }, // seconds per full rotation
-      tick(t, dt) {
-        this.el.object3D.rotation.y += (Math.PI * 2) / (this.data.period * 1000) * dt;
-      }
-    });
-
-    AFRAME.registerComponent('particle-burst', {
-      init() {
-        this.triggered = false;
-        this.active    = false;
-        this.points    = null;
-        this.velArr    = null;
-        this.startTime = 0;
-        this.LIFETIME  = 2400; // ms
-      },
-
-      trigger() {
-        if (this.triggered) return;
-        this.triggered = true;
-        this.active    = true;
-
-        const N   = 300;
-        const geo = new THREE.BufferGeometry();
-        const pos = new Float32Array(N * 3); // all zeros — start at burst origin
-        const col = new Float32Array(N * 3);
-
-        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-        geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
-
-        this.velArr = new Float32Array(N * 3);
-
-        for (let i = 0; i < N; i++) {
-          // Spherical spread biased toward upper hemisphere
-          const theta = Math.random() * Math.PI * 2;
-          const phi   = Math.random() * Math.PI * 0.72; // 0–130° from zenith
-          const spd   = 2.5 + Math.random() * 5.5;     // 2.5–8 m/s
-
-          this.velArr[i * 3]     = spd * Math.sin(phi) * Math.cos(theta);
-          this.velArr[i * 3 + 1] = spd * Math.cos(phi);
-          this.velArr[i * 3 + 2] = spd * Math.sin(phi) * Math.sin(theta);
-
-          // Duke blue (#003087) 60%, white 40%
-          if (Math.random() > 0.4) {
-            col[i * 3] = 0; col[i * 3 + 1] = 48 / 255; col[i * 3 + 2] = 135 / 255;
-          } else {
-            col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = 1;
-          }
-        }
-
-        const mat = new THREE.PointsMaterial({
-          size:            0.45,
-          vertexColors:    true,
-          transparent:     true,
-          opacity:         1,
-          depthWrite:      false,
-          sizeAttenuation: true,
-        });
-
-        this.points = new THREE.Points(geo, mat);
-
-        // Anchor particles to the entity's world position at trigger time
-        this.el.object3D.updateWorldMatrix(true, false);
-        const wp = new THREE.Vector3();
-        this.el.object3D.getWorldPosition(wp);
-        this.points.position.copy(wp);
-
-        this.el.sceneEl.object3D.add(this.points);
-        this.startTime = performance.now();
-      },
-
-      tick() {
-        if (!this.active || !this.points) return;
-
-        const t        = (performance.now() - this.startTime) / 1000; // seconds
-        const progress = t / (this.LIFETIME / 1000);
-
-        if (progress >= 1) { this._cleanup(); return; }
-
-        const posArr = this.points.geometry.attributes.position.array;
-        const N      = posArr.length / 3;
-        const g      = -9.8; // m/s²
-
-        for (let i = 0; i < N; i++) {
-          // Analytic ballistic trajectory from burst origin
-          posArr[i * 3]     = this.velArr[i * 3]     * t;
-          posArr[i * 3 + 1] = this.velArr[i * 3 + 1] * t + 0.5 * g * t * t;
-          posArr[i * 3 + 2] = this.velArr[i * 3 + 2] * t;
-        }
-
-        this.points.geometry.attributes.position.needsUpdate = true;
-        // Fade out over last 40%
-        this.points.material.opacity = progress > 0.6
-          ? 1 - (progress - 0.6) / 0.4
-          : 1;
-      },
-
-      _cleanup() {
-        if (!this.points) return;
-        this.el.sceneEl.object3D.remove(this.points);
-        this.points.geometry.dispose();
-        this.points.material.dispose();
-        this.points = null;
-        this.active = false;
-      },
-
-      remove() { this._cleanup(); }
-    });
-  </script>
+          onerror="showErr('FAILED to load aframe-ar.js')"></script>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-           background: #000; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; }
 
-    /* ── iOS tap gate ────────────────────────────────────────────── */
+    /* iOS tap gate to unlock compass */
     #tap-gate {
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 14px;
       background: rgba(0,0,0,0.76); color: #fff;
-      text-align: center; cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
+      text-align: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
     }
     #tap-gate .icon  { font-size: 54px; }
     #tap-gate .label { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
     #tap-gate .sub   { font-size: 13px; opacity: 0.5; }
 
-    /* ── Navigation overlay ──────────────────────────────────────── */
+    /* Navigation overlay */
     #nav {
-      position: fixed; inset: 0; z-index: 200;
-      pointer-events: none;
+      position: fixed; inset: 0; z-index: 200; pointer-events: none;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 24px;
-      transition: opacity 1.6s ease;
     }
     #arrow-ring { transition: opacity 0.8s ease; }
-
-    /* Distance pill */
     #dist-pill {
       background: rgba(0,0,0,0.52);
       backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-      color: #fff; font-size: 18px; font-weight: 600;
-      letter-spacing: -0.2px; padding: 11px 28px;
-      border-radius: 40px; border: 1px solid rgba(255,255,255,0.14);
+      color: #fff; font-size: 18px; font-weight: 600; letter-spacing: -0.2px;
+      padding: 11px 28px; border-radius: 40px;
+      border: 1px solid rgba(255,255,255,0.14);
       box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-      transition: opacity 0.8s ease, background 0.6s ease, border-color 0.6s ease;
+      transition: opacity 0.8s ease;
     }
-    /* "Getting close" tint — applied via JS at < 50 ft */
-    #dist-pill.close {
-      background: rgba(0, 48, 135, 0.68);
-      border-color: rgba(255,255,255,0.28);
-    }
-
-    /* ── Waiting hint ────────────────────────────────────────────── */
     #waiting {
-      position: fixed; bottom: 52px; left: 50%;
-      transform: translateX(-50%);
+      position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%);
       background: rgba(0,0,0,0.48);
       backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
       color: rgba(255,255,255,0.62); font-size: 13px;
@@ -213,14 +76,14 @@
 </head>
 <body>
 
-  <!-- iOS tap gate (hidden immediately on Android) -->
+  <!-- iOS compass permission gate -->
   <div id="tap-gate" onclick="grantPermission()">
     <div class="icon">🧭</div>
     <div class="label">Tap to enable compass</div>
     <div class="sub">Required for AR navigation</div>
   </div>
 
-  <!-- Directional navigation overlay -->
+  <!-- Directional nav overlay -->
   <div id="nav">
     <svg id="arrow-ring" width="180" height="180" viewBox="-90 -90 180 180">
       <circle r="84" fill="rgba(0,0,0,0.42)" stroke="rgba(255,255,255,0.11)" stroke-width="1.5"/>
@@ -229,10 +92,8 @@
       <line x1="-72" y1="0"   x2="-62" y2="0"   stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
       <line x1="72"  y1="0"   x2="62"  y2="0"   stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
       <g id="arrow-inner">
-        <polygon
-          points="0,-52 24,-14 12,-14 12,40 -12,40 -12,-14 -24,-14"
-          fill="rgba(255,255,255,0.92)"
-          filter="url(#glow)"/>
+        <polygon points="0,-52 24,-14 12,-14 12,40 -12,40 -12,-14 -24,-14"
+                 fill="rgba(255,255,255,0.92)" filter="url(#glow)"/>
         <circle cx="0" cy="40" r="5" fill="rgba(255,255,255,0.32)"/>
       </g>
       <defs>
@@ -245,39 +106,12 @@
     <div id="dist-pill">–– m</div>
   </div>
 
-  <!-- Waiting hint -->
   <div id="waiting">Waiting for GPS and compass…</div>
 
-  <!-- ── AR Scene ──────────────────────────────────────────────────
-    GROUND LEVEL
-    ─────────────────────────────────────────────────────────────────
-    The browser Geolocation API provides coords.altitude (metres
-    above sea level) and coords.altitudeAccuracy, but GPS altitude
-    is notoriously unreliable on phones (±15–30 m typical, often
-    null on Android). The Open-Elevation API can return terrain
-    elevation at any lat/lng, but without accurate device altitude
-    to compare against it doesn't improve AR placement.
-
-    Practical solution: offset the model downward by camera eye
-    height (~1.6 m) so its origin lands at approximate ground level.
-
-      position="0 -1.6 0"
-
-    The exact y depends on where the GLB's origin sits:
-      · Origin at model feet  → y = -1.6  (correct as-is)
-      · Origin at centre      → y = -1.6 - halfHeight
-      · Origin at top         → y = -1.6 - fullHeight
-    Fine-tune on-site.
-
-    CALIBRATION
-    ─────────────────────────────────────────────────────────────────
-    Target: steps in front of Duke Chapel
-    lat  36.001639
-    lng -78.939694
-
-    scale  30.48 30.48 30.48  →  ~100 ft tall (native model ≈ 1 m)
-                                  Adjust: 15.24 = 50 ft, 60.96 = 200 ft
-    position y  -1.6          →  ground level (camera-height offset)
+  <!-- ── AR Scene — minimal, matches the official AR.js example ─────
+    Target: steps in front of Duke Chapel  (36.001639, -78.939694)
+    scale  30.48        → ~100 ft tall (native model ≈ 1 m)
+    position y -1.6     → ground level (camera eye-height offset)
   -->
   <a-scene
     vr-mode-ui="enabled: false"
@@ -288,148 +122,90 @@
       <a-asset-item id="model" src="blue-devil.glb"></a-asset-item>
     </a-assets>
 
-    <a-camera id="ar-camera" gps-new-camera="gpsMinDistance: 5"></a-camera>
+    <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
 
-    <!--
-      Starts at scale ≈ 0 (invisible).
-      'reveal' event triggers spring scale-up after the particle burst.
-      particle-burst component fires first, then the scale animation
-      follows 450 ms later so the Blue Devil appears through the particles.
-    -->
     <a-entity
       id="blue-devil"
       gltf-model="#model"
       gps-new-entity-place="latitude: 36.001639; longitude: -78.939694"
-      scale="0.001 0.001 0.001"
-      position="0 -1.6 0"
-      particle-burst
-      slow-spin
-      animation__reveal="property: scale; from: 0.001 0.001 0.001; to: 30.48 30.48 30.48; dur: 1400; easing: easeOutElastic; startEvents: reveal; autoplay: false">
+      scale="30.48 30.48 30.48"
+      position="0 -1.6 0">
     </a-entity>
 
   </a-scene>
 
   <script>
-    // ── Constants ─────────────────────────────────────────────────
-    const TARGET   = { lat: 36.001639, lng: -78.939694 };
-    const REVEAL_M = 3.048; // 10 feet
+    // Report model load success/failure on screen
+    document.addEventListener('DOMContentLoaded', function () {
+      var e = document.getElementById('blue-devil');
+      e.addEventListener('model-loaded', function () { /* loaded ok */ });
+      e.addEventListener('model-error', function () { showErr('model-error: blue-devil.glb failed to load'); });
+      if (typeof AFRAME !== 'undefined' && !AFRAME.components['gps-new-camera'])
+        showErr('gps-new-camera missing — AR.js did not load');
+    });
 
-    // ── State ─────────────────────────────────────────────────────
-    let compassHeading = null;
-    let userPos        = null;
-    let smoothAngle    = null;
-    let revealed       = false;
+    // ── Navigation overlay logic ──────────────────────────────────
+    const TARGET = { lat: 36.001639, lng: -78.939694 };
+    let compassHeading = null, userPos = null, smoothAngle = null;
 
-    // ── iOS permission gate ───────────────────────────────────────
     const needsPermission =
       typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function';
-
-    if (!needsPermission) {
-      document.getElementById('tap-gate').style.display = 'none';
-      boot();
-    }
+    if (!needsPermission) { document.getElementById('tap-gate').style.display = 'none'; boot(); }
 
     async function grantPermission() {
-      try {
-        const res = await DeviceOrientationEvent.requestPermission();
-        if (res !== 'granted') return;
-      } catch (e) { return; }
+      try { if (await DeviceOrientationEvent.requestPermission() !== 'granted') return; }
+      catch (e) { return; }
       document.getElementById('tap-gate').style.display = 'none';
       boot();
     }
 
-    // ── Sensor setup ──────────────────────────────────────────────
     function boot() {
       window.addEventListener('deviceorientationabsolute', onOrientation, true);
       window.addEventListener('deviceorientation',         onOrientation, true);
-      navigator.geolocation.watchPosition(onGPS, () => {}, {
-        enableHighAccuracy: true, maximumAge: 0
-      });
+      navigator.geolocation.watchPosition(onGPS, function(){}, { enableHighAccuracy: true, maximumAge: 0 });
     }
 
     function onOrientation(e) {
       let h = null;
-      if (e.webkitCompassHeading != null)       h = e.webkitCompassHeading;
-      else if (e.alpha != null)                 h = (360 - e.alpha) % 360;
+      if (e.webkitCompassHeading != null) h = e.webkitCompassHeading;
+      else if (e.alpha != null)           h = (360 - e.alpha) % 360;
       if (h === null) return;
-      compassHeading = h;
-      tick();
+      compassHeading = h; tick();
     }
+    function onGPS(pos) { userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; tick(); }
 
-    function onGPS(pos) {
-      userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      tick();
+    function distanceTo(la1, lo1, la2, lo2) {
+      const R = 6371000, r = Math.PI/180;
+      const dL = (la2-la1)*r, dG = (lo2-lo1)*r;
+      const a = Math.sin(dL/2)**2 + Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dG/2)**2;
+      return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
-
-    // ── Geometry helpers ──────────────────────────────────────────
-    function distanceTo(lat1, lng1, lat2, lng2) {
-      const R = 6_371_000, r = Math.PI / 180;
-      const dL = (lat2 - lat1) * r, dG = (lng2 - lng1) * r;
-      const a  = Math.sin(dL/2)**2 + Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dG/2)**2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    function bearingTo(la1, lo1, la2, lo2) {
+      const r = Math.PI/180, dG = (lo2-lo1)*r;
+      const y = Math.sin(dG)*Math.cos(la2*r);
+      const x = Math.cos(la1*r)*Math.sin(la2*r) - Math.sin(la1*r)*Math.cos(la2*r)*Math.cos(dG);
+      return ((Math.atan2(y,x)*180/Math.PI)+360)%360;
     }
+    function lerpAngle(a, b, t) { return (a + (((b-a+540)%360)-180)*t + 360)%360; }
 
-    function bearingTo(lat1, lng1, lat2, lng2) {
-      const r  = Math.PI / 180, dG = (lng2 - lng1) * r;
-      const y  = Math.sin(dG) * Math.cos(lat2 * r);
-      const x  = Math.cos(lat1*r)*Math.sin(lat2*r) - Math.sin(lat1*r)*Math.cos(lat2*r)*Math.cos(dG);
-      return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
-    }
-
-    function lerpAngle(a, b, t) {
-      return (a + (((b - a + 540) % 360) - 180) * t + 360) % 360;
-    }
-
-    // ── Particle + model reveal ───────────────────────────────────
-    function triggerReveal() {
-      const entity = document.getElementById('blue-devil');
-
-      // 1. Fire particle burst immediately
-      entity.components['particle-burst'].trigger();
-
-      // 2. Scale the model up 450 ms later (particles lead the entrance)
-      setTimeout(() => entity.emit('reveal'), 450);
-
-      // 3. Fade the entire navigation overlay to nothing
-      document.getElementById('nav').style.opacity     = '0';
-      document.getElementById('waiting').style.opacity = '0';
-    }
-
-    // ── Main update (250 ms + sensor events) ─────────────────────
     function tick() {
-      if (!userPos || compassHeading === null || revealed) return;
-
+      if (!userPos || compassHeading === null) return;
       const dist  = distanceTo(userPos.lat, userPos.lng, TARGET.lat, TARGET.lng);
       const bear  = bearingTo(userPos.lat, userPos.lng, TARGET.lat, TARGET.lng);
       const angle = (bear - compassHeading + 360) % 360;
-
       smoothAngle = smoothAngle === null ? angle : lerpAngle(smoothAngle, angle, 0.18);
 
-      // Keep waiting hint hidden once we have a fix
       document.getElementById('waiting').style.opacity    = '0';
       document.getElementById('arrow-ring').style.opacity = '1';
       document.getElementById('dist-pill').style.opacity  = '1';
-
-      document.getElementById('arrow-inner')
-        .setAttribute('transform', `rotate(${smoothAngle.toFixed(1)})`);
+      document.getElementById('arrow-inner').setAttribute('transform', `rotate(${smoothAngle.toFixed(1)})`);
 
       const feet = dist * 3.28084;
       document.getElementById('dist-pill').textContent = feet < 528
         ? `${Math.round(feet)} ft to Chapel steps`
-        : `${(feet / 5280).toFixed(2)} mi to Chapel steps`;
-
-      // Duke-blue tint on pill when < 50 ft — builds anticipation
-      document.getElementById('dist-pill')
-        .classList.toggle('close', feet < 50);
-
-      // Trigger reveal at 10 feet
-      if (dist <= REVEAL_M) {
-        revealed = true;
-        triggerReveal();
-      }
+        : `${(feet/5280).toFixed(2)} mi to Chapel steps`;
     }
-
     setInterval(tick, 250);
   </script>
 
