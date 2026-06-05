@@ -78,9 +78,9 @@
 
   <!-- iOS compass permission gate -->
   <div id="tap-gate" onclick="grantPermission()">
-    <div class="icon">🧭</div>
-    <div class="label">Tap to enable compass</div>
-    <div class="sub">Required for AR navigation</div>
+    <div class="icon">📷</div>
+    <div class="label">Tap to start AR</div>
+    <div class="sub">Enables camera &amp; compass</div>
   </div>
 
   <!-- Directional nav overlay -->
@@ -113,9 +113,10 @@
     scale  30.48        → ~100 ft tall (native model ≈ 1 m)
     position y -1.6     → ground level (camera eye-height offset)
   -->
+  <!-- NOTE: the `arjs` attribute is added by JS only AFTER the camera is
+       granted (see grantPermission), so AR.js never grabs a denied camera. -->
   <a-scene
     vr-mode-ui="enabled: false"
-    arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false"
     renderer="antialias: true; alpha: true">
 
     <a-assets timeout="30000">
@@ -148,15 +149,40 @@
     const TARGET = { lat: 36.001639, lng: -78.939694 };
     let compassHeading = null, userPos = null, smoothAngle = null;
 
-    const needsPermission =
-      typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DeviceOrientationEvent.requestPermission === 'function';
-    if (!needsPermission) { document.getElementById('tap-gate').style.display = 'none'; boot(); }
+    // AR.js config — applied to the scene ONLY after the camera is granted.
+    const ARJS_CONFIG = 'sourceType: webcam; videoTexture: true; debugUIEnabled: false';
 
+    // Always require a tap. The tap is the user gesture that lets iOS show
+    // the camera + compass prompts, so the camera is forced on every load.
     async function grantPermission() {
-      try { if (await DeviceOrientationEvent.requestPermission() !== 'granted') return; }
-      catch (e) { return; }
+      // 1. iOS compass permission (best effort — ignored on Android)
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try { await DeviceOrientationEvent.requestPermission(); } catch (e) {}
+      }
+
+      // 2. Force the rear-camera prompt. Insecure context (http) has no
+      //    mediaDevices at all — surface that clearly.
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showErr('Camera API unavailable. The page must be served over HTTPS ' +
+                '(GitHub Pages is fine; a plain http:// LAN address is not).');
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } }, audio: false
+        });
+        // Release immediately so AR.js can claim the camera next.
+        stream.getTracks().forEach(function (t) { t.stop(); });
+      } catch (e) {
+        showErr('Camera blocked (' + e.name + '): ' + e.message +
+                '\nTap “aA” in the address bar → Website Settings → Camera → Allow, then reload.');
+        return; // do NOT start AR without a camera (that is the blue screen)
+      }
+
+      // 3. Camera granted — hide gate, start AR.js, start sensors.
       document.getElementById('tap-gate').style.display = 'none';
+      document.querySelector('a-scene').setAttribute('arjs', ARJS_CONFIG);
       boot();
     }
 
