@@ -25,10 +25,6 @@
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"
           onerror="showErr('FAILED to load aframe.min.js')"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/three.js/build/ar-threex-location-only.js"
-          onerror="showErr('FAILED to load ar-threex-location-only.js')"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar.js"
-          onerror="showErr('FAILED to load aframe-ar.js')"></script>
 
   <script>
     AFRAME.registerComponent('slow-spin', {
@@ -165,13 +161,16 @@
       <a-asset-item id="model" src="blue-devil.glb"></a-asset-item>
     </a-assets>
 
-    <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
+    <a-camera
+      position="0 1.6 0"
+      look-controls="enabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
+      wasd-controls="enabled: false">
+    </a-camera>
 
     <a-entity
       id="blue-devil"
       gltf-model="#model"
-      gps-new-entity-place="latitude: 36.001639; longitude: -78.939694"
-      position="0 -1.6 0"
+      position="0 0 -5"
       scale="4.6 4.6 4.6"
       visible="false"
       slow-spin
@@ -200,13 +199,7 @@
       document.getElementById('tap-gate').style.display = 'none';
       document.querySelector('a-scene').setAttribute('arjs', ARJS_CONFIG);
 
-      // Make the devil visible immediately once the model loads —
-      // GPS placement won't work indoors, so we show it via CSS transform trick below.
-      var entity = document.getElementById('blue-devil');
-      entity.addEventListener('model-loaded', function () {
-        entity.setAttribute('visible', 'true');
-      }, { once: true });
-      entity.addEventListener('model-error', function () {
+      document.getElementById('blue-devil').addEventListener('model-error', function () {
         showErr('model-error: blue-devil.glb failed to load');
       });
 
