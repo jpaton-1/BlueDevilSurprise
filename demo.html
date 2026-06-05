@@ -154,12 +154,18 @@
         showErr('model-error: blue-devil.glb failed to load');
       });
 
-      // Reveal as soon as the model is loaded and the component is ready
-      entity.addEventListener('model-loaded', function () {
+      function reveal() {
         entity.setAttribute('visible', 'true');
         var pb = entity.components['particle-burst'];
         if (pb) pb.trigger();
-      }, { once: true });
+      }
+
+      // model-loaded may have already fired during page load — check first
+      if (entity.getObject3D('mesh')) {
+        reveal();
+      } else {
+        entity.addEventListener('model-loaded', reveal, { once: true });
+      }
     }
   </script>
 
