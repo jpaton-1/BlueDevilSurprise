@@ -229,15 +229,20 @@
       }, { once: true });
     });
 
-    // DEMO: place the user 2 m south of the Chapel so the devil renders
-    // 2 m in front (not on top of you), and the reveal distance is satisfied.
-    navigator.geolocation = {
-      watchPosition: function (success) {
-        success({ coords: { latitude: 36.001621, longitude: -78.939694, accuracy: 1 } });
-        return 0;
-      },
-      clearWatch: function () {}
-    };
+    // DEMO: mock geolocation so every watcher (ours + AR.js internal) gets
+    // the Chapel coordinates immediately, making the devil appear in place.
+    (function () {
+      var DEMO_COORDS = { latitude: 36.001621, longitude: -78.939694, accuracy: 1 };
+      var watchers = [];
+      navigator.geolocation = {
+        watchPosition: function (success) {
+          var id = watchers.push(success) - 1;
+          success({ coords: DEMO_COORDS });
+          return id;
+        },
+        clearWatch: function (id) { watchers[id] = null; }
+      };
+    })();
 
     // ── Navigation overlay logic ──────────────────────────────────
     const TARGET    = { lat: 36.001639, lng: -78.939694 };
@@ -250,6 +255,7 @@
       if (revealed) return;
       revealed = true;
       var entity = document.getElementById('blue-devil');
+      entity.setAttribute('visible', 'true');
       var pb = entity.components['particle-burst'];
       if (pb) pb.trigger();
       document.getElementById('nav').style.opacity     = '0';
