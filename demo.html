@@ -19,81 +19,82 @@
       b.textContent = (b.textContent ? b.textContent + '\n' : '') + msg;
       b.style.display = 'block';
     }
-    window.onerror = function(msg, src, line) { showErr('JS: ' + msg + ' (line ' + line + ')'); };
-    window.addEventListener('unhandledrejection', function(e) { showErr('Promise: ' + e.reason); });
+    window.onerror = function(msg,src,line){ showErr('JS: '+msg+' (line '+line+')'); };
+    window.addEventListener('unhandledrejection',function(e){ showErr('Promise: '+e.reason); });
   </script>
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"
-          onerror="showErr('FAILED to load aframe.min.js')"></script>
+          onerror="showErr('FAILED: aframe')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/three.js/build/ar-threex-location-only.js"
-          onerror="showErr('FAILED to load ar-threex-location-only.js')"></script>
+          onerror="showErr('FAILED: ar-threex')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar.js"
-          onerror="showErr('FAILED to load aframe-ar.js')"></script>
+          onerror="showErr('FAILED: aframe-ar')"></script>
 
   <script>
     AFRAME.registerComponent('slow-spin', {
       schema: { period: { default: 18 } },
-      tick: function (t, dt) {
+      tick: function(t, dt) {
         if (!dt) return;
-        this.el.object3D.rotation.y += (Math.PI * 2) / (this.data.period * 1000) * dt;
+        this.el.object3D.rotation.y += (Math.PI*2) / (this.data.period*1000) * dt;
       }
     });
 
     AFRAME.registerComponent('particle-burst', {
-      init: function () { this.active = false; this.points = null; this.vel = null; this.t0 = 0; this.LIFE = 2400; },
-      trigger: function () {
+      init: function() { this.active=false; this.points=null; this.vel=null; this.t0=0; this.LIFE=2400; },
+      trigger: function() {
         if (this.active || this.points) return;
-        var N = 300, geo = new THREE.BufferGeometry();
-        var pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
-        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-        geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
-        this.vel = new Float32Array(N * 3);
-        for (var i = 0; i < N; i++) {
-          var th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI * 0.72, sp = 2.5 + Math.random() * 5.5;
-          this.vel[i*3]   = sp * Math.sin(ph) * Math.cos(th);
-          this.vel[i*3+1] = sp * Math.cos(ph);
-          this.vel[i*3+2] = sp * Math.sin(ph) * Math.sin(th);
-          if (Math.random() > 0.4) { col[i*3]=0; col[i*3+1]=48/255; col[i*3+2]=135/255; }
-          else { col[i*3]=col[i*3+1]=col[i*3+2]=1; }
+        var N=300, geo=new THREE.BufferGeometry();
+        var pos=new Float32Array(N*3), col=new Float32Array(N*3);
+        geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+        geo.setAttribute('color',    new THREE.BufferAttribute(col,3));
+        this.vel=new Float32Array(N*3);
+        for (var i=0;i<N;i++) {
+          var th=Math.random()*Math.PI*2, ph=Math.random()*Math.PI*0.72, sp=2.5+Math.random()*5.5;
+          this.vel[i*3]=sp*Math.sin(ph)*Math.cos(th);
+          this.vel[i*3+1]=sp*Math.cos(ph);
+          this.vel[i*3+2]=sp*Math.sin(ph)*Math.sin(th);
+          if (Math.random()>0.4){col[i*3]=0;col[i*3+1]=48/255;col[i*3+2]=135/255;}
+          else{col[i*3]=col[i*3+1]=col[i*3+2]=1;}
         }
-        var mat = new THREE.PointsMaterial({ size: 0.5, vertexColors: true, transparent: true, opacity: 1, depthWrite: false, sizeAttenuation: true });
-        this.points = new THREE.Points(geo, mat);
-        this.el.object3D.updateWorldMatrix(true, false);
-        var wp = new THREE.Vector3(); this.el.object3D.getWorldPosition(wp);
+        var mat=new THREE.PointsMaterial({size:0.5,vertexColors:true,transparent:true,opacity:1,depthWrite:false,sizeAttenuation:true});
+        this.points=new THREE.Points(geo,mat);
+        this.el.object3D.updateWorldMatrix(true,false);
+        var wp=new THREE.Vector3(); this.el.object3D.getWorldPosition(wp);
         this.points.position.copy(wp);
         this.el.sceneEl.object3D.add(this.points);
-        this.t0 = performance.now(); this.active = true;
+        this.t0=performance.now(); this.active=true;
       },
-      tick: function () {
-        if (!this.active || !this.points) return;
-        var t = (performance.now() - this.t0) / 1000, p = t / (this.LIFE / 1000);
-        if (p >= 1) { this.el.sceneEl.object3D.remove(this.points); this.points.geometry.dispose(); this.points.material.dispose(); this.points = null; this.active = false; return; }
-        var a = this.points.geometry.attributes.position.array, N = a.length / 3;
-        for (var i = 0; i < N; i++) { a[i*3]=this.vel[i*3]*t; a[i*3+1]=this.vel[i*3+1]*t - 4.9*t*t; a[i*3+2]=this.vel[i*3+2]*t; }
-        this.points.geometry.attributes.position.needsUpdate = true;
-        this.points.material.opacity = p > 0.6 ? 1 - (p - 0.6) / 0.4 : 1;
+      tick: function() {
+        if (!this.active||!this.points) return;
+        var t=(performance.now()-this.t0)/1000, p=t/(this.LIFE/1000);
+        if (p>=1){this.el.sceneEl.object3D.remove(this.points);this.points.geometry.dispose();this.points.material.dispose();this.points=null;this.active=false;return;}
+        var a=this.points.geometry.attributes.position.array, N=a.length/3;
+        for (var i=0;i<N;i++){a[i*3]=this.vel[i*3]*t;a[i*3+1]=this.vel[i*3+1]*t-4.9*t*t;a[i*3+2]=this.vel[i*3+2]*t;}
+        this.points.geometry.attributes.position.needsUpdate=true;
+        this.points.material.opacity=p>0.6?1-(p-0.6)/0.4:1;
       }
     });
   </script>
 
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; }
-    a-scene { position: fixed; inset: 0; }
-    .a-canvas { background: transparent !important; }
-    video { object-fit: cover; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body { width:100%; height:100%; overflow:hidden; background:#000; }
+    a-scene { position:fixed; inset:0; }
+    .a-canvas { background:transparent !important; }
+    video { object-fit:cover; }
 
     #tap-gate {
-      position: fixed; inset: 0; z-index: 9999;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 14px;
-      background: rgba(0,0,0,0.76); color: #fff;
-      text-align: center; cursor: pointer; -webkit-tap-highlight-color: transparent;
+      position:fixed; inset:0; z-index:9999;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:14px;
+      background:rgba(0,0,0,0.76); color:#fff;
+      text-align:center; cursor:pointer;
+      font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+      -webkit-tap-highlight-color:transparent;
     }
-    #tap-gate .icon  { font-size: 54px; }
-    #tap-gate .label { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
-    #tap-gate .sub   { font-size: 13px; opacity: 0.5; }
+    #tap-gate .icon  { font-size:54px; }
+    #tap-gate .label { font-size:20px; font-weight:700; letter-spacing:-0.3px; }
+    #tap-gate .sub   { font-size:13px; opacity:0.5; }
   </style>
 </head>
 <body>
@@ -101,29 +102,33 @@
   <div id="tap-gate" onclick="grantPermission()">
     <div class="icon">📷</div>
     <div class="label">Tap to start AR</div>
-    <div class="sub">Enables camera</div>
+    <div class="sub">Enables camera &amp; motion</div>
   </div>
 
+  <!--
+    Demo mode: AR.js handles webcam + device-orientation tracking.
+    The Blue Devil is placed at a fixed world position (not GPS-locked).
+    position="0 -1.6 -4": 4 m in front, feet at floor level for a standing person.
+  -->
   <a-scene
-    vr-mode-ui="enabled: false"
+    vr-mode-ui="enabled:false"
     embedded
-    loading-screen="enabled: false"
-    renderer="antialias: true; alpha: true">
+    loading-screen="enabled:false"
+    renderer="antialias:true; alpha:true">
 
     <a-assets timeout="30000">
       <a-asset-item id="model" src="blue-devil.glb"></a-asset-item>
     </a-assets>
 
     <a-camera
-      position="0 1.6 0"
-      look-controls="enabled: true; magicWindowTrackingEnabled: true; pointerLockEnabled: false"
-      wasd-controls="enabled: false">
+      look-controls="enabled:true; magicWindowTrackingEnabled:true; pointerLockEnabled:false"
+      wasd-controls="enabled:false">
     </a-camera>
 
     <a-entity
       id="blue-devil"
       gltf-model="#model"
-      position="0 0 -5"
+      position="0 -1.6 -4"
       scale="4.6 4.6 4.6"
       visible="false"
       slow-spin
@@ -135,32 +140,34 @@
   <script>
     function grantPermission() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showErr('Camera API unavailable. The page must be served over HTTPS.');
-        return;
+        showErr('Camera unavailable — must be served over HTTPS.'); return;
       }
+
       document.getElementById('tap-gate').style.display = 'none';
 
-      // Start the webcam feed
-      document.querySelector('a-scene').setAttribute('arjs', 'sourceType: webcam; videoTexture: false; debugUIEnabled: false');
+      // Start webcam via AR.js (handles video texture + sizing)
+      document.querySelector('a-scene').setAttribute('arjs',
+        'sourceType:webcam; videoTexture:false; debugUIEnabled:false');
 
+      // iOS device orientation permission
       if (typeof DeviceOrientationEvent !== 'undefined' &&
           typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().catch(function () {});
+        DeviceOrientationEvent.requestPermission().catch(function(){});
       }
 
       var entity = document.getElementById('blue-devil');
 
-      entity.addEventListener('model-error', function () {
-        showErr('model-error: blue-devil.glb failed to load');
+      entity.addEventListener('model-error', function() {
+        showErr('blue-devil.glb failed to load');
       });
 
       function reveal() {
         entity.setAttribute('visible', 'true');
-        var pb = entity.components['particle-burst'];
-        if (pb) pb.trigger();
+        // components are guaranteed initialized by model-loaded
+        entity.components['particle-burst'].trigger();
       }
 
-      // model-loaded may have already fired during page load — check first
+      // model-loaded may have already fired — check the mesh directly
       if (entity.getObject3D('mesh')) {
         reveal();
       } else {
