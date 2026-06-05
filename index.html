@@ -36,6 +36,12 @@
     html, body { width: 100%; height: 100%; overflow: hidden; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; }
 
+    /* Camera video + AR canvas must fill the screen and the canvas must be
+       transparent so the camera feed shows through (no blue background). */
+    a-scene { position: fixed; inset: 0; }
+    .a-canvas { background: transparent !important; }
+    video { object-fit: cover; }
+
     /* iOS tap gate to unlock compass */
     #tap-gate {
       position: fixed; inset: 0; z-index: 9999;
@@ -117,6 +123,8 @@
        granted (see grantPermission), so AR.js never grabs a denied camera. -->
   <a-scene
     vr-mode-ui="enabled: false"
+    embedded
+    loading-screen="enabled: false"
     renderer="antialias: true; alpha: true">
 
     <a-assets timeout="30000">
@@ -125,12 +133,15 @@
 
     <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
 
+    <!-- Hidden until GPS positions it at the Chapel, so the giant blue model
+         never renders point-blank on the camera (which looks like a blue screen). -->
     <a-entity
       id="blue-devil"
       gltf-model="#model"
       gps-new-entity-place="latitude: 36.001639; longitude: -78.939694"
       scale="30.48 30.48 30.48"
-      position="0 -1.6 0">
+      position="0 -1.6 0"
+      visible="false">
     </a-entity>
 
   </a-scene>
@@ -143,6 +154,13 @@
       e.addEventListener('model-error', function () { showErr('model-error: blue-devil.glb failed to load'); });
       if (typeof AFRAME !== 'undefined' && !AFRAME.components['gps-new-camera'])
         showErr('gps-new-camera missing — AR.js did not load');
+
+      // Reveal the model only after AR.js places it via a real GPS fix,
+      // so it appears at the Chapel rather than on top of the camera.
+      var cam = document.querySelector('a-camera');
+      if (cam) cam.addEventListener('gps-camera-update-position', function () {
+        document.getElementById('blue-devil').setAttribute('visible', 'true');
+      }, { once: true });
     });
 
     // ── Navigation overlay logic ──────────────────────────────────
@@ -150,7 +168,7 @@
     let compassHeading = null, userPos = null, smoothAngle = null;
 
     // AR.js config — applied to the scene ONLY after the camera is granted.
-    const ARJS_CONFIG = 'sourceType: webcam; videoTexture: true; debugUIEnabled: false';
+    const ARJS_CONFIG = 'sourceType: webcam; videoTexture: false; debugUIEnabled: false';
 
     // Always require a tap. The tap is the user gesture that lets iOS show
     // the camera + compass prompts, so the camera is forced on every load.
