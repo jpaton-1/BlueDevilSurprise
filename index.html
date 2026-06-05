@@ -174,13 +174,12 @@
 
   <div id="waiting">Waiting for GPS and compass…</div>
 
-  <!-- ── AR Scene — minimal, matches the official AR.js example ─────
+  <!-- ── AR Scene — matches the official AR.js location-based example ─────
     Target: steps in front of Duke Chapel  (36.001639, -78.939694)
-    scale  30.48        → ~100 ft tall (native model ≈ 1 m)
-    position y -1.6     → ground level (camera eye-height offset)
-  -->
-  <!-- NOTE: the `arjs` attribute is added by JS only AFTER the camera is
-       granted (see grantPermission), so AR.js never grabs a denied camera. -->
+    scale  4.6          → ~15 ft tall (native model ≈ 1 m). 3.05≈10ft, 6.1≈20ft
+    position y -1.6     → ground level (model origin is at the feet)
+    NOTE: the `arjs` attribute is added by JS only AFTER the camera is
+          granted (see grantPermission), so AR.js never grabs a denied camera. -->
   <a-scene
     vr-mode-ui="enabled: false"
     embedded
@@ -193,20 +192,22 @@
 
     <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
 
-    <!-- Hidden + tiny until you are within 10 ft of the GPS point. Then the
-         particles burst and the model springs up to full 100 ft scale.
-         Keeping it hidden until reveal also prevents the giant blue model from
-         rendering point-blank on the camera before GPS places it. -->
+    <!-- Locked to the Chapel GPS coordinates and visible from a distance so you
+         can see it as you walk up. Model origin is at the FEET, so position
+         y = -1.6 m (= 1.6 m below eye height) plants the feet on the ground.
+         scale 4.6 → ~15 ft tall (native model height ≈ 1 m).
+         Resize by changing all three numbers: 3.05 ≈ 10 ft, 6.1 ≈ 20 ft.
+         Starts hidden; un-hidden on the first GPS fix so it never renders
+         point-blank on the camera before AR.js places it at the Chapel. -->
     <a-entity
       id="blue-devil"
       gltf-model="#model"
       gps-new-entity-place="latitude: 36.001639; longitude: -78.939694"
       position="0 -1.6 0"
-      scale="0.001 0.001 0.001"
+      scale="4.6 4.6 4.6"
       visible="false"
       slow-spin
-      particle-burst
-      animation__reveal="property: scale; from: 0.001 0.001 0.001; to: 30.48 30.48 30.48; dur: 1400; easing: easeOutElastic; startEvents: reveal; autoplay: false">
+      particle-burst>
     </a-entity>
 
   </a-scene>
@@ -219,6 +220,13 @@
       e.addEventListener('model-error', function () { showErr('model-error: blue-devil.glb failed to load'); });
       if (typeof AFRAME !== 'undefined' && !AFRAME.components['gps-new-camera'])
         showErr('gps-new-camera missing — AR.js did not load');
+
+      // Show the devil once AR.js has a GPS fix and has pinned it to the
+      // Chapel coordinates — so it appears locked in the world, not on the camera.
+      var cam = document.querySelector('a-camera');
+      if (cam) cam.addEventListener('gps-camera-update-position', function () {
+        document.getElementById('blue-devil').setAttribute('visible', 'true');
+      }, { once: true });
     });
 
     // ── Navigation overlay logic ──────────────────────────────────
@@ -226,15 +234,14 @@
     const REVEAL_M  = 3.048; // 10 feet — distance at which the Blue Devil appears
     let compassHeading = null, userPos = null, smoothAngle = null, revealed = false;
 
-    // Particle burst + spring reveal + fade the nav UI away.
+    // Arrival (within 10 ft): celebratory particle burst + fade the nav away.
+    // The devil is already visible and GPS-locked, so we don't rescale it here.
     function triggerReveal() {
       if (revealed) return;
       revealed = true;
       var entity = document.getElementById('blue-devil');
-      entity.setAttribute('visible', 'true');
       var pb = entity.components['particle-burst'];
       if (pb) pb.trigger();
-      setTimeout(function () { entity.emit('reveal'); }, 450); // model springs up after particles lead
       document.getElementById('nav').style.opacity     = '0';
       document.getElementById('waiting').style.opacity = '0';
     }
