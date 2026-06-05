@@ -117,7 +117,8 @@
       position: fixed; inset: 0; z-index: 200; pointer-events: none;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 24px;
-      transition: opacity 1.6s ease;
+      opacity: 0;                 /* hidden until permissions are done + data flows */
+      transition: opacity 1s ease;
     }
     #arrow-ring { transition: opacity 0.8s ease; }
     #dist-pill {
@@ -241,28 +242,29 @@
     // AR.js config — applied to the scene ONLY after the camera is granted.
     const ARJS_CONFIG = 'sourceType: webcam; videoTexture: false; debugUIEnabled: false';
 
-    // Always require a tap. The tap is the user gesture that lets iOS show
-    // the camera + compass prompts, so the camera is forced on every load.
-    async function grantPermission() {
-      // 1. iOS compass permission (best effort — ignored on Android)
-      if (typeof DeviceOrientationEvent !== 'undefined' &&
-          typeof DeviceOrientationEvent.requestPermission === 'function') {
-        try { await DeviceOrientationEvent.requestPermission(); } catch (e) {}
-      }
-
-      // 2. Secure-context guard — the camera needs HTTPS.
+    // One tap fires every permission. NOTE: not async, and the camera is
+    // started FIRST and SYNCHRONOUSLY. iOS only honours getUserMedia while the
+    // tap's user-activation is still live; any `await` before it consumes that
+    // activation and the camera silently never starts ("never initialized").
+    function grantPermission() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         showErr('Camera API unavailable. The page must be served over HTTPS.');
         return;
       }
-
-      // 3. Let AR.js be the SOLE owner of the camera. Do NOT call getUserMedia
-      //    ourselves first: grabbing the camera, releasing it, then letting
-      //    AR.js re-grab it races on iOS and kills the feed — exactly the
-      //    "worked for a moment, then failed" symptom. One grab only.
       document.getElementById('tap-gate').style.display = 'none';
+
+      // (a) Camera — synchronous, in-gesture. AR.js owns the only camera grab.
       document.querySelector('a-scene').setAttribute('arjs', ARJS_CONFIG);
+
+      // (b) Sensors — GPS watcher + compass listeners.
       boot();
+
+      // (c) iOS compass permission — fired from the same tap (its own promise,
+      //     not awaited before the camera, so activation is preserved above).
+      if (typeof DeviceOrientationEvent !== 'undefined' &&
+          typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().catch(function () {});
+      }
     }
 
     function boot() {
@@ -296,11 +298,15 @@
 
     function tick() {
       if (!userPos || compassHeading === null) return;
+      if (revealed) return; // nav UI is gone for good once the reveal fires
       const dist  = distanceTo(userPos.lat, userPos.lng, TARGET.lat, TARGET.lng);
       const bear  = bearingTo(userPos.lat, userPos.lng, TARGET.lat, TARGET.lng);
       const angle = (bear - compassHeading + 360) % 360;
       smoothAngle = smoothAngle === null ? angle : lerpAngle(smoothAngle, angle, 0.18);
 
+      // Reveal the compass overlay only now — data is flowing, so every
+      // permission prompt is already dismissed and nothing renders behind it.
+      document.getElementById('nav').style.opacity        = '1';
       document.getElementById('waiting').style.opacity    = '0';
       document.getElementById('arrow-ring').style.opacity = '1';
       document.getElementById('dist-pill').style.opacity  = '1';
