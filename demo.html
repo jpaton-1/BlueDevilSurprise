@@ -25,6 +25,10 @@
 
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"
           onerror="showErr('FAILED to load aframe.min.js')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/three.js/build/ar-threex-location-only.js"
+          onerror="showErr('FAILED to load ar-threex-location-only.js')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar.js"
+          onerror="showErr('FAILED to load aframe-ar.js')"></script>
 
   <script>
     AFRAME.registerComponent('slow-spin', {
@@ -76,7 +80,6 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #000; }
-
     a-scene { position: fixed; inset: 0; }
     .a-canvas { background: transparent !important; }
     video { object-fit: cover; }
@@ -91,32 +94,6 @@
     #tap-gate .icon  { font-size: 54px; }
     #tap-gate .label { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
     #tap-gate .sub   { font-size: 13px; opacity: 0.5; }
-
-    #nav {
-      position: fixed; inset: 0; z-index: 200; pointer-events: none;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 24px;
-      opacity: 0;
-      transition: opacity 1s ease;
-    }
-    #arrow-ring { transition: opacity 0.8s ease; }
-    #dist-pill {
-      background: rgba(0,0,0,0.52);
-      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-      color: #fff; font-size: 18px; font-weight: 600; letter-spacing: -0.2px;
-      padding: 11px 28px; border-radius: 40px;
-      border: 1px solid rgba(255,255,255,0.14);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-      transition: opacity 0.8s ease;
-    }
-    #waiting {
-      position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%);
-      background: rgba(0,0,0,0.48);
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      color: rgba(255,255,255,0.62); font-size: 13px;
-      padding: 7px 18px; border-radius: 20px;
-      z-index: 300; white-space: nowrap; transition: opacity 0.8s;
-    }
   </style>
 </head>
 <body>
@@ -124,32 +101,8 @@
   <div id="tap-gate" onclick="grantPermission()">
     <div class="icon">📷</div>
     <div class="label">Tap to start AR</div>
-    <div class="sub">Enables camera &amp; compass</div>
+    <div class="sub">Enables camera</div>
   </div>
-
-  <div id="nav">
-    <svg id="arrow-ring" width="180" height="180" viewBox="-90 -90 180 180">
-      <circle r="84" fill="rgba(0,0,0,0.42)" stroke="rgba(255,255,255,0.11)" stroke-width="1.5"/>
-      <line x1="0"   y1="-72" x2="0"   y2="-62" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-      <line x1="0"   y1="72"  x2="0"   y2="62"  stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-      <line x1="-72" y1="0"   x2="-62" y2="0"   stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-      <line x1="72"  y1="0"   x2="62"  y2="0"   stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
-      <g id="arrow-inner">
-        <polygon points="0,-52 24,-14 12,-14 12,40 -12,40 -12,-14 -24,-14"
-                 fill="rgba(255,255,255,0.92)" filter="url(#glow)"/>
-        <circle cx="0" cy="40" r="5" fill="rgba(255,255,255,0.32)"/>
-      </g>
-      <defs>
-        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="2.5" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-    </svg>
-    <div id="dist-pill">–– ft to Chapel steps</div>
-  </div>
-
-  <div id="waiting">Starting demo…</div>
 
   <a-scene
     vr-mode-ui="enabled: false"
@@ -180,96 +133,33 @@
   </a-scene>
 
   <script>
-    const ARJS_CONFIG = 'sourceType: webcam; videoTexture: false; debugUIEnabled: false';
-
-    // Simulated approach: start 200 ft away, count down to 0 over ~15 seconds,
-    // then trigger the reveal exactly as the real experience does.
-    const DEMO_START_FT = 200;
-    const DEMO_DURATION_MS = 0;
-    let revealed = false;
-    let smoothAngle = 0;
-    let demoStartTime = null;
-    let compassHeading = null;
-
     function grantPermission() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         showErr('Camera API unavailable. The page must be served over HTTPS.');
         return;
       }
       document.getElementById('tap-gate').style.display = 'none';
-      document.querySelector('a-scene').setAttribute('arjs', ARJS_CONFIG);
 
-      document.getElementById('blue-devil').addEventListener('model-error', function () {
-        showErr('model-error: blue-devil.glb failed to load');
-      });
+      // Start the webcam feed
+      document.querySelector('a-scene').setAttribute('arjs', 'sourceType: webcam; videoTexture: false; debugUIEnabled: false');
 
       if (typeof DeviceOrientationEvent !== 'undefined' &&
           typeof DeviceOrientationEvent.requestPermission === 'function') {
         DeviceOrientationEvent.requestPermission().catch(function () {});
       }
 
-      // Use real compass if available, otherwise just spin the arrow slowly.
-      window.addEventListener('deviceorientationabsolute', onOrientation, true);
-      window.addEventListener('deviceorientation', onOrientation, true);
-
-      demoStartTime = performance.now();
-
-      // Show the nav overlay
-      document.getElementById('nav').style.opacity = '1';
-      document.getElementById('waiting').style.opacity = '0';
-
-      runDemo();
-    }
-
-    function onOrientation(e) {
-      let h = null;
-      if (e.webkitCompassHeading != null) h = e.webkitCompassHeading;
-      else if (e.alpha != null)           h = (360 - e.alpha) % 360;
-      if (h !== null) compassHeading = h;
-    }
-
-    function runDemo() {
-      if (revealed) return;
-
-      const elapsed = performance.now() - demoStartTime;
-      const progress = Math.min(elapsed / DEMO_DURATION_MS, 1);
-
-      // Ease-in-out so it feels like walking, not a mechanical timer
-      const eased = progress < 0.5
-        ? 2 * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-
-      const feet = Math.round(DEMO_START_FT * (1 - eased));
-
-      // Rotate arrow: use real compass if we have it, otherwise drift slowly
-      if (compassHeading !== null) {
-        // Point arrow toward a fixed bearing (north = 0°) relative to compass
-        const angle = (0 - compassHeading + 360) % 360;
-        smoothAngle = smoothAngle + (((angle - smoothAngle + 540) % 360) - 180) * 0.18;
-      } else {
-        smoothAngle = (smoothAngle + 0.4) % 360; // gentle drift if no compass
-      }
-
-      document.getElementById('arrow-inner').setAttribute('transform', `rotate(${smoothAngle.toFixed(1)})`);
-      document.getElementById('dist-pill').textContent = `${feet} ft to Chapel steps`;
-
-      if (feet <= 10) {
-        triggerReveal();
-        return;
-      }
-
-      requestAnimationFrame(runDemo);
-    }
-
-    function triggerReveal() {
-      if (revealed) return;
-      revealed = true;
       var entity = document.getElementById('blue-devil');
-      entity.setAttribute('visible', 'true');
-      var pb = entity.components['particle-burst'];
-      if (pb) pb.trigger();
-      document.getElementById('nav').style.opacity = '0';
-      document.getElementById('waiting').style.opacity = '0';
+
+      entity.addEventListener('model-error', function () {
+        showErr('model-error: blue-devil.glb failed to load');
+      });
+
+      // Reveal as soon as the model is loaded and the component is ready
+      entity.addEventListener('model-loaded', function () {
+        entity.setAttribute('visible', 'true');
+        var pb = entity.components['particle-burst'];
+        if (pb) pb.trigger();
+      }, { once: true });
     }
   </script>
 
