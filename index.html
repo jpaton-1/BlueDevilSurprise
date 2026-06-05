@@ -33,10 +33,11 @@
           its absence was the “Can't find variable: THREEx” crash. -->
   <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/three.js/build/ar-threex-location-only.js"
           onerror="showErr('FAILED to load ar-threex-location-only.js')"></script>
-  <!-- ② Location-only A-Frame components (gps-new-camera / gps-new-entity-place).
-          15 KB, no artoolkit/NFT engine — avoids the image-tracking init path. -->
-  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar-new-location-only.js"
-          onerror="showErr('FAILED to load aframe-ar-new-location-only.js')"></script>
+  <!-- ② FULL A-Frame build — provides BOTH the webcam video system
+          (sourceType/arjs-video, which the small location-only build lacked →
+          black screen) AND gps-new-camera. Works because ① loads THREEx first. -->
+  <script src="https://cdn.jsdelivr.net/npm/@ar-js-org/ar.js@3.4.8/aframe/build/aframe-ar.js"
+          onerror="showErr('FAILED to load aframe-ar.js')"></script>
 
   <!-- Particle burst + slow spin components (registered before the scene parses) -->
   <script>
